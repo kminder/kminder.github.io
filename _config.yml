@@ -16,6 +16,10 @@ twitter_username: minderit
 github_username:  kminder
 
 # Build settings
-markdown: kramdown
+markdown: redcarpet
+redcarpet:
+  extensions: ["smart", "tables", "no_intra_emphasis", "fenced_code_blocks", "autolink", "strikethrough", "superscript", "with_toc_data"]
 
-
+#markdown: kramdown
+#kramdown:
+#  input: GFM

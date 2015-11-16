@@ -28,7 +28,10 @@ $content-width:    800px;
 $on-palm:          600px;
 $on-laptop:        800px;
 
-
+$border-color:       #ddd;
+$table-border-color: $border-color;
+$table-border:       1px solid $table-border-color;
+$table-padding:      5px;
 
 // Use media queries like this:
 // @include media-query($on-palm) {
@@ -51,3 +54,15 @@ $on-laptop:        800px;
         "layout",
         "syntax-highlighting"
 ;
+
+table {
+  border-collapse: collapse;
+  border: $table-border
+}
+td {
+  padding: $table-padding
+}
+tr, td, th {
+  vertical-align: middle;
+  border: $table-border
+}
