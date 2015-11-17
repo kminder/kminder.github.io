@@ -152,7 +152,7 @@ If you are getting HTTP 404 errors there is probably a problem with this configu
 - The role/implementation/version triad is used through Knox for integration plugins.
 - Think of the role as an interface in Java.
 - This attribute declares what role this service "implements".
-- This will need to match the topology file's <topology><service><role> for this service. 
+- This will need to match the topology file's \<topology>\<service>\<role> for this service. 
 
 `<service name="weather"`
 
@@ -218,7 +218,7 @@ This is a implemented as rewrite function and is another custom extension point.
 `<topology><service><role>WEATHER`
 
 - This causes the service definition with role WEATHER to be loaded into the runtime.
-- Since <name> and <verion> are not present a default is selected if there are multiple options.
+- Since \<name> and \<verion> are not present, a default is selected if there are multiple options.
 
 `<topology><service><url>http://api.openweathermap.org:80`
 
