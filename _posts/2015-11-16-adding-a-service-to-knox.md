@@ -226,7 +226,7 @@ This is a implemented as rewrite function and is another custom extension point.
 - This populates the data used by {$serviceUrl[WEATHER]} in the rules with the correct target URL.
   
 Hopefully all of this provides a more gentle introduction to adding a service to Apache Knox than might be offered in the [Apache Knox Developer's Guide][dev-guide].
-If you have more questions, comments or suggestions please feel free so joing the community at [Apache Knox][knox-site].
+If you have more questions, comments or suggestions please join the [Apache Knox][knox-site] community.
 In particular you might be interested in one of the [mailing lists][knox-lists].
 
 [knox-site]: http://knox.apache.org/
