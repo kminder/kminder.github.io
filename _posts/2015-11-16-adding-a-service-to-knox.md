@@ -7,12 +7,14 @@ categories: knox
 
 This article covers adding a service to [Apache Knox][knox-site].
 
-The intention here is to provide an intentionally simple example, avoiding complexity wherever possible.
+The idea here is to provide an intentionally simple example, avoiding complexity wherever possible.
 The goal being getting something working as a starting point upon which more complicated scenarios could build.
 You may want to review the Apache Knox [User's Guide][user-guide] and [Developer's Guide][dev-guide] before reading this. 
 
 The API used here is an [OpenWeatherMap API](http://openweathermap.org/current#zip) that returns the current weather information for a given zip code.
 This is the cURL command to access this API directly.  Give it a try.
+
+If you are new to Knox you may also want to check out '[Setting up Apache Knox in three easy steps](/knox/2015/11/18/setting-up-knox.html)'.
 
 ```sh
 curl 'http://api.openweathermap.org/data/2.5/weather?zip=95054,us&appid=2de143494c0b295cca9337e1e96b00e0'

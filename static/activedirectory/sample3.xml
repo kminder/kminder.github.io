@@ -26,9 +26,9 @@
             <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
             <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
 
-            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
             <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
 
             <param name="main.ldapRealm.searchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>

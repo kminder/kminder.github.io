@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  "Using Apache Knox with ActiveDirectory"
-date:   9999-01-01
+date:   2015-11-18
 categories: knox
 ---
 
@@ -12,16 +12,21 @@ This was a conscious decision made to simplify the initial user experience with 
 Unfortunately, it can make the transition to popular enterprise identity stores such as ActiveDirectory confusing.
 This article is intended to remedy some of that confusion.
 
+If you are new to Knox you may want to check out '[Setting up Apache Knox in three easy steps](/knox/2015/11/18/setting-up-knox.html)'.
+
 ## Part 1
  
-So lets go back to basics and build up an example from first principles.
+Lets go back to basics and build up an example from first principles.
 To do this we will start with the simplest topology file that will work.
 We will iteratively transform that topology file until it integrates with ActiveDirectory for both authentication and authorization.
  
 # Sample 1
 
 The initial topology file we will start with doesn't integrate with ActiveDirectory at all.
-Create this topology file.
+Instead it uses a capability of [Shiro][shiro] to embed users directly within its configuration.
+This approach is largely taken to "shake out" the process of editing topology files for various purposes.
+At the same time it minimizes external dependencies to help ensure a successful starting point. 
+Now, create this topology file.
  
 [\<GATEWAY_HOME>/conf/topologies/sample1.xml](/static/activedirectory/sample1.xml)
 
@@ -48,7 +53,7 @@ If you are a seasoned Knox veteran, you may notice the alternative \<param name=
 Both this and \<param>\<name>\</name>\<value>\</value>\</param> style are supported.
 I've used the attribute style here for compactness.  
 
-Once this topology file is created you will be able to access the Knox Admin API which is what the KNOX service in the topology file provides.
+Once this topology file is created you will be able to access the Knox Admin API, which is what the KNOX service in the topology file provides.
 The cURL command shown below retrieves the version information from the Knox server.
 Notice `-u admin:admin-secret` in the command below matches `<param name="users.admin" value="admin-secret"/>` in the topology file above.  
 
@@ -57,7 +62,7 @@ curl -u admin:admin-secret -ik 'https://localhost:8443/gateway/sample1/api/v1/ve
 ```
 
 Below is an example response body output from the command above.  
-_Note: The `-i` causes the return of the full response including status line and headers which aren't shown below._
+_Note: The `-i` causes the return of the full response including status line and headers which aren't shown below for brevity._
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -68,13 +73,13 @@ _Note: The `-i` causes the return of the full response including status line and
 ```
 
 As an aside, if you prefer JSON you can request that using the HTTP Accept header via the cURL `-H` flag.  
-Don't forget to scroll right as some of these commands will start to get long.
+Don't forget to scroll right in these code boxes as some of these commands will start to get long.
 
 ```sh
 curl -u admin:admin-secret -H 'Accept: application/json' -ik 'https://localhost:8443/gateway/sample/api/v1/version'
 ```
 
-Below is an example response JSON body.
+Below is an example response JSON body for this command.
 
 ```json
 {
@@ -87,10 +92,11 @@ Below is an example response JSON body.
 
 # Sample 2
 
-With authentication working lets now add authorization since the ultimate goal is an example with ActiveDirectory including both.
-The second sample topology file below adds a second user and an authorization provider.
+With authentication working, now add authorization since the real goal is an example with ActiveDirectory including both.
+The second sample topology file below adds a second user (guest) and an authorization provider.
 The `<param name="knox.acl" value="admin;*;*"/>` dictates that only the admin user can access the knox service.
-Create this topology file.
+Go ahead and create this topology file.
+Notice the examples use a different name for each topology file so you can always refer back to the previous ones.
 
 [\<GATEWAY_HOME>/conf/topologies/sample2.xml](/static/activedirectory/sample2.xml)
 
@@ -131,19 +137,20 @@ curl -u admin:admin-secret -ik 'https://localhost:8443/gateway/sample2/api/v1/ve
 curl -u guest:guest-secret -ik 'https://localhost:8443/gateway/sample2/api/v1/version'
 ```
 
+The first command will succeed.
 The second command above will return a `HTTP/1.1 403 Forbidden` status along with an error response body.
 
 ## Part 2
 
 These embedded examples are all well and good but this article is supposed to be about ActiveDirectory.
-This however takes us from examples that will "just work" to examples that need to be customized for the environment in which they run.
-Specifically they require some basic network address and LDAP information.
-The table below describes the information you will need from your environment and shows what is being used in the samples here.
-You will need to adjust these in the samples to match your environment.
+This takes us from examples that "just work" to examples that need to be customized for the environment in which they run.
+Specifically they require some basic network address and and bunch of LDAP information.
+The table below describes the initial information you will need from your environment and shows what is being used in the samples here.
+You will need to adjust values these when used in the samples to match your environment.
 
 **A word of caution is warranted here.
 There are as many ways to setup LDAP and ActiveDirectory as there are IT departments.
-This variability requires flexible configuration which in turn often causes confusion, especially given poor documentation. 
+This variability requires flexibility which in turn often causes confusion, especially given poor documentation (guilty). 
 The examples here focus on a single specific pattern that is seen frequently, but your mileage may vary.**
 
 | Name             | Description                                                         | Example                                                |
@@ -161,24 +168,27 @@ This is for simplicity.
 The password can be stored in a protected credential store as described [here](http://knox.apache.org/books/knox-0-6-0/user-guide.html#Special+note+on+parameter+main.ldapRealm.contextFactory.systemPassword).  
 Note2: This search base should constrain the search as much as possible to limit the amount of data returned by the query.
 
-To try and start things off on the right foot, lets try and execute an LDAP bind against AD.
+To start things off on the right foot, lets execute an LDAP bind against ActiveDirectory.
 For this you will need your values for Server Host, Server Port, System Username and System Password described in the table above.
-
 This initial testing will be done using command line tools from [OpenLDAP][openldap].
 If you don't have these command line tools available don't despair Knox provides some alternatives I'll show you later. 
 
-The command below will help ensure that the values for Server Host, Server Port, System Username and System Password are correct.  
+The command below will help ensure that the values for Server Host, Server Port, System Username and System Password are correct.
+In this case I'm using my own test account as the system user because it happens to have search privileges.
 
 ```sh
-ldapwhoami -h ad-nano.qe.hortonworks.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w 'p@ssw0rd'
+ldapwhoami -h ad.qa.your-domain.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w '********'
 ```
-- -h: Server Host
-- -p: Server Port
-- -D: System Username
-- -w: System Password
+This is brief description of each command line parameter used above.
 
-In this case I'm using my own test account as the system user because it happens to have search privileges.
-For me this returns the output below.
+- -h: Provide your Server Host
+- -p: Provide your Server Port
+- -x: Use simple authentication vs SASL
+- -D: Provide your System Username
+- -w: Provide your System Password
+
+
+For me this command returns the output below.
 
 ```
 u:HWQE\kminder
@@ -189,12 +199,13 @@ Note that in this case the system user is searching for itself because -D and -b
 You could change -b to search for other users.
 
 ```sh
-ldapsearch -h ad-nano.qe.hortonworks.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w 'p@ssw0rd' -b 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com'
+ldapsearch -h ad.qa.your-domain.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w '********' -b 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com'
 ```
-- -b: System Username 
 
-This should return all of the LDAP attributes for the system user.
-Take note of a few key attributes like objectClass which here is "person", and sAMAccountName which here is "kminder".
+- -b: Provide your System Username 
+
+This returns all of the LDAP attributes for the system user.
+Take note of a few key attributes like objectClass, which here is 'person', and sAMAccountName, which here is 'kminder'.
 
 ```
 # extended LDIF
@@ -250,19 +261,20 @@ result: 0 Success
 # numEntries: 1
 ```
 
-Next lets check the values for Search Base, Search Attribute and Search Class with a command like the one below.  
-Again, don't forget to scroll right.
+Next, lets check the values for Search Base, Search Attribute and Search Class with a command like the one below.  
+Again, don't forget to scroll right to see the whole command.
 
 ```sh
-ldapsearch -h ad-nano.qe.hortonworks.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w 'p@ssw0rd' -b 'CN=Users,DC=hwqe,DC=hortonworks,DC=com' -z 5 '(objectClass=person)' sAMAccountName
+ldapsearch -h ad.qa.your-domain.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w '********' -b 'CN=Users,DC=hwqe,DC=hortonworks,DC=com' -z 5 '(objectClass=person)' sAMAccountName
 ```
 - -z 5: Limit the search results to 5 entries. Note that by default AD will only return a max of 1000 entries.
-- '(objectClass=person)': Limit the search results to entries where objectClass=person
+- '(objectClass=person)': Limit the search results to entries where objectClass=person. This value was taken from the search result above.
 - sAMAccountName: Return only the SAMAccountName attribute
  
-If no results were returned go back and check the output from the search above for corrected settings.
+If no results were returned go back and check the output from the search above for the correct settings.
 The results for this command should look something like what is shown below.
 Take note of the various attribute values returned for sAMAccountName.
+These are the usernames that will ultimately be used for login.
 
 ```
 # extended LDIF
@@ -303,25 +315,28 @@ result: 4 Size limit exceeded
 
 # Sample 3
 
-Since you have verified all of the environmental information required for authentication, you are ready to create your third topology file.
-Just as with the first example, this first one will only include authentication.
+At this point you have verified all of the environmental information required for authentication, you are ready to create your third topology file.
+Just as with the first example, this topology file will only include authentication.
 We will tackle authorization later.
-Create this sample3 topology file.
-Take care to replace all of the example environment values with the correct values for your environment.
 
-| Parameter                                    | Example                                                     |
-| -------------------------------------------- | ----------------------------------------------------------- |
-| main.ldapRealm                               | org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm          |
-| main.ldapContextFactory                      | org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory | 
-| main.ldapRealm.contextFactory                | $ldapContextFactory                                         |
-| main.ldapRealm.contextFactory.url            | ldap://ad-nano.qe.hortonworks.com:389                       |
-| main.ldapRealm.contextFactory.systemUsername | CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com      |
-| main.ldapRealm.contextFactory.systemPassword | p@ssw0rd                                                    |
-| main.ldapRealm.searchBase                    | CN=Users,DC=hwqe,DC=hortonworks,DC=com                      |
-| main.ldapRealm.userSearchAttributeName       | sAMAccountName                                              |
-| main.ldapRealm.userObjectClass               | person                                                      |
-| urls./**                                     | authcBasic                                                  |
-<br>
+The table below highlights the the important settings in the topology file.
+
+| Parameter                                    | Description                                                        | Example                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
+| main.ldapRealm                               | The class name for Knox's Shiro Realm implementation.              | org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm          |
+| main.ldapContextFactory                      | The class name for Knox's Shiro LdapContextFactory implementation. | org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory | 
+| main.ldapRealm.contextFactory                | Sets the context factory on the realm.                             | $ldapContextFactory                                         |
+| main.ldapRealm.contextFactory.url            | Sets the AD URL on the context factory.                            | ldap://ad.qa.your-domain.com:389                            |
+| main.ldapRealm.contextFactory.systemUsername | Sets the system users DN on the context factory.                   | CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com      |
+| main.ldapRealm.contextFactory.systemPassword | Sets the system users password on the context factory.             | ********                                                    |
+| main.ldapRealm.searchBase                    | The subset of users to search for authentication.                  | CN=Users,DC=hwqe,DC=hortonworks,DC=com                      |
+| main.ldapRealm.userSearchAttributeName       | The attribute who's value to use for username comparison.          | sAMAccountName                                              |
+| main.ldapRealm.userObjectClass               | The objectClass to limit the search scope.                         | person                                                      |
+| urls./**                                     | Apply authentication to all URLs.                                  | authcBasic                                                  |
+<br/>
+
+Create this sample3 topology file.
+Take care to replace all of the example environment values with the correct values for your environment you discovered and verified above.
 
 [\<GATEWAY_HOME>/conf/topologies/sample3.xml](/static/activedirectory/sample3.xml)
 
@@ -337,9 +352,9 @@ Take care to replace all of the example environment values with the correct valu
       <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
       <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
 
-      <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+      <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
       <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-      <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+      <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
 
       <param name="main.ldapRealm.searchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
       <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
@@ -369,25 +384,39 @@ If the command above works you can move on to testing the LDAP search configurat
 If you don't provide the username and password via the command line switches you will be prompted to enter them. 
 
 ```sh
-bin/knoxcli.sh user-auth-test --cluster sample3 --u kminder --p p@ssw0rd
+bin/knoxcli.sh user-auth-test --cluster sample3 --u kminder --p '********'
 LDAP authentication successful!
 ```
 
 Once all of that is working go ahead and try the cURL command.
 
 ```sh
-curl -u kminder:p@ssw0rd -ik 'https://localhost:8443/gateway/sample3/api/v1/version'
+curl -u kminder:******** -ik 'https://localhost:8443/gateway/sample3/api/v1/version'
 ```
 
 # Sample 4
 
 The next step is to enable authorization.
 To accomplish this there is a bit more environmental information needed.
-The OpenLDAP command line tools are useful here again to ensure those we have the correct values.
-Authorization requires group lookup and for this the TODO
+The OpenLDAP command line tools are useful here again to ensure that we have the correct values.
+Authorization requires determining group membership.
+We will be using searching to determine group membership.
+The way ActiveDirectory is setup for this example, this requires knowing four additional pieces of information: groupSearchBase, groupObjectClass, groupIdAttribute and memberAttribute.  
 
+The first, 'groupSearchBase' is something that you will need to find out from your ActiveDirectory administrator.
+In my example, this is value 'OU=groups,DC=hwqe,DC=hortonworks,DC=com'.
+This value is a distinguished name that constrains the search groups for which a given user might be a member.
+Once you have this you can 'ldapsearch' to see the attributes of some groups to determine the other three settings.
+
+Here is an example of an 'ldapsearch' using groupSearchBase from my environment.
+ 
 ```sh
-~/Projects/knox-devguide-tests/install/knox-0.7.0-SNAPSHOT> ldapsearch -h ad-nano.qe.hortonworks.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w 'p@ssw0rd' -b 'OU=groups,DC=hwqe,DC=hortonworks,DC=com' -z 2
+ldapsearch -h ad.qa.your-domain.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w '********' -b 'OU=groups,DC=hwqe,DC=hortonworks,DC=com' -z 2
+```
+
+This is the output.
+
+```
 # extended LDIF
 #
 # LDAPv3
@@ -450,8 +479,19 @@ result: 4 Size limit exceeded
 # numEntries: 2
 ```
 
+From the output, take note of:
+
+- the relevant objectClass: 'group'
+- attribute used to enumerate members: 'member'
+- the attributes that most uniquely name the group: 'cn' or 'sAMAccountName'
+
+These are the groupObjectClass and memberAttribute,  values respectively.
+We will use groupObjectClass=group, memberAttribute=member and groupIdAttribute=sAMAccountName.
+
+The command below repeats the search above but returns just the member attribute for up to 5 groups.  
+
 ```sh
-ldapsearch -h ad-nano.qe.hortonworks.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w 'p@ssw0rd' -b 'OU=groups,DC=hwqe,DC=hortonworks,DC=com' member
+ldapsearch -h ad.qa.your-domain.com -p 389 -x -D 'CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com' -w '********' -b 'OU=groups,DC=hwqe,DC=hortonworks,DC=com' -z 5 member
 # extended LDIF
 #
 # LDAPv3
@@ -504,15 +544,24 @@ result: 0 Success
 # numEntries: 6
 ```
 
-| Paramete                            | Description | Example                                 |
-| ----------------------------------- | ----------- | --------------------------------------- |
-| main.ldapRealm.userSearchBase       |             | CN=Users,DC=hwqe,DC=hortonworks,DC=com  | 
-| main.ldapRealm.authorizationEnabled |             | true                                    |
-| main.ldapRealm.groupSearchBase      |             | OU=groups,DC=hwqe,DC=hortonworks,DC=com |
-| main.ldapRealm.groupObjectClass     |             | group                                   |
-| main.ldapRealm.groupIdAttribute     |             | CN                                      |
-| main.ldapRealm.memberAttribute      |             | member                                  |
+Armed with this group information you can now create a topology file that causes the Shiro authentication provider to retrieve group information.
+Keep in mind that we haven't made it all the way to authorization yet.
+This step is just to prove that your can get the group information back from ActiveDirectory.
+Once we have the group lookup working, we will enable authorization in the next step.
+
+The table below highlights the changes that you will be making in this topology file.
+
+| Parameter                           | Description                                         | Example                                 |
+| ----------------------------------- | --------------------------------------------------- | --------------------------------------- |
+| main.ldapRealm.userSearchBase       | Replaces main.ldapRealm.searchBase                  | CN=Users,DC=hwqe,DC=hortonworks,DC=com  | 
+| main.ldapRealm.authorizationEnabled | Enabled the group lookup functionality.             | true                                    |
+| main.ldapRealm.groupSearchBase      | The subset of groups to search for user membership. | OU=groups,DC=hwqe,DC=hortonworks,DC=com |
+| main.ldapRealm.groupObjectClass     | The objectClass to limit the search scope.          | group                                   |
+| main.ldapRealm.groupIdAttribute     | The attribute used to provide the group name.       | sAMAccountName                          |
+| main.ldapRealm.memberAttribute      | The attribute used to provide the group's members.  | member                                  |
 <br>
+
+Create this topology file file now.
 
 [\<GATEWAY_HOME>/conf/topologies/sample4.xml](/static/activedirectory/sample4.xml)
 
@@ -528,9 +577,9 @@ result: 0 Success
             <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
             <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
 
-            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
             <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
 
             <param name="main.ldapRealm.userSearchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
@@ -539,7 +588,7 @@ result: 0 Success
             <param name="main.ldapRealm.authorizationEnabled" value="true"/>
             <param name="main.ldapRealm.groupSearchBase" value="OU=groups,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.groupObjectClass" value="group"/>
-            <param name="main.ldapRealm.groupIdAttribute" value="CN"/>
+            <param name="main.ldapRealm.groupIdAttribute" value="sAMAccountName"/>
             <param name="main.ldapRealm.memberAttribute" value="member"/>
 
             <param name="urls./**" value="authcBasic"/>
@@ -552,8 +601,11 @@ result: 0 Success
 </topology>
 ```
 
+Once again the Knox tooling can be used to test this configuration.
+This time the `--g` flag will be added to retrieve group information. 
+
 ```sh
-bin/knoxcli.sh user-auth-test --cluster sample4 --u sam --p 'Horton!#works' --g
+bin/knoxcli.sh user-auth-test --cluster sample4 --u sam --p '********' --g
 LDAP authentication successful!
 sam is a member of: analyst
 sam is a member of: knox_hdp_users
@@ -561,17 +613,12 @@ sam is a member of: test grp
 sam is a member of: scientist
 ```
 
-```sh
-bin/knoxcli.sh user-auth-test --cluster sample4 --u kminder --p 'p@ssw0rd' --g
-LDAP authentication successful!
-kminder does not belong to any groups
-Warn: main.ldapGroupContextFactory is not present in topology
-Warn: main.ldapRealm.memberAttributeValueTemplate is not present in topology
-You were looking for this user's groups but this user does not belong to any.
-Your topology file may be incorrectly configured for group lookup.
-```
-
 # Sample 5
+
+The next sample adds in an authorization provider to act upon the groups.
+This is the same provider that was added back in the second sample.
+The parameter `<param name="knox.acl" value="*;knox_hdp_users;*"/>` in this case dictates that only members of group knox_hdp_users can addess the Knox Admin API via the sample5 topology.
+Create the topology shown below.  Don't forget to tailor it to your environment.
 
 [\<GATEWAY_HOME>/conf/topologies/sample5.xml](/static/activedirectory/sample5.xml)
 
@@ -586,16 +633,16 @@ Your topology file may be incorrectly configured for group lookup.
             <param name="main.ldapRealm" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm"/>
             <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
             <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
-            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
             <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
             <param name="main.ldapRealm.userSearchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
             <param name="main.ldapRealm.userObjectClass" value="person"/>
             <param name="main.ldapRealm.authorizationEnabled" value="true"/>
             <param name="main.ldapRealm.groupSearchBase" value="OU=groups,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.groupObjectClass" value="group"/>
-            <param name="main.ldapRealm.groupIdAttribute" value="CN"/>
+            <param name="main.ldapRealm.groupIdAttribute" value="sAMAccountName"/>
             <param name="main.ldapRealm.memberAttribute" value="member"/>
             <param name="urls./**" value="authcBasic"/>
         </provider>
@@ -615,27 +662,28 @@ Your topology file may be incorrectly configured for group lookup.
 ```
 
 ```sh
-curl -u kminder:p@ssw0rd -ik 'https://localhost:8443/gateway/sample5/api/v1/version'
+curl -u kminder:'********' -ik 'https://localhost:8443/gateway/sample5/api/v1/version'
 403
 ```
 
 ```sh
-curl -u sam:'Horton!#works' -ik 'https://localhost:8443/gateway/sample5/api/v1/version'
+curl -u sam:'********' -ik 'https://localhost:8443/gateway/sample5/api/v1/version'
 200
 ```
 
 # Sample 6
 
 Next lets enable caching because out of the box this important performance enhancement isn't enabled.
-TODO
+The table below hilights the changes that will be made to the authentication provider settings.
 
-| Parameter                                   | Description | Example                                       |
-| ------------------------------------------- | ----------- | --------------------------------------------- |
-| main.cacheManager                           |             | org.apache.shiro.cache.ehcache.EhCacheManager | 
-| main.securityManager.cacheManager           |             | $cacheManager                                 |
-| main.ldapRealm.authenticationCachingEnabled |             | true                                          |
+| Parameter                                   | Description                                       | Example                                       |
+| ------------------------------------------- | ------------------------------------------------- | --------------------------------------------- |
+| main.cacheManager                           | The name of the class implementing the cache.     | org.apache.shiro.cache.ehcache.EhCacheManager | 
+| main.securityManager.cacheManager           | Sets the cache manager on the security manager.   | $cacheManager                                 |
+| main.ldapRealm.authenticationCachingEnabled | Enabled the use of caching during authentication. | true                                          |
 <br>
 
+Create the sample6 topology file now.
 
 [\<GATEWAY_HOME>/conf/topologies/sample6.xml](/static/activedirectory/sample6.xml)
 
@@ -650,16 +698,16 @@ TODO
             <param name="main.ldapRealm" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm"/>
             <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
             <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
-            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
             <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
             <param name="main.ldapRealm.userSearchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
             <param name="main.ldapRealm.userObjectClass" value="person"/>
             <param name="main.ldapRealm.authorizationEnabled" value="true"/>
             <param name="main.ldapRealm.groupSearchBase" value="OU=groups,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.groupObjectClass" value="group"/>
-            <param name="main.ldapRealm.groupIdAttribute" value="CN"/>
+            <param name="main.ldapRealm.groupIdAttribute" value="sAMAccountName"/>
             <param name="main.ldapRealm.memberAttribute" value="member"/>
 
             <param name="main.cacheManager" value="org.apache.shiro.cache.ehcache.EhCacheManager"/>
@@ -683,8 +731,10 @@ TODO
 </topology>
 ```
 
+With this topology file you can execute a sequence of cURL commands to demonstrate that the authentication is indeed cached.
+
 ```sh
-curl -u sam:'Horton!#works' -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
+curl -u sam:'********' -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
 ```
 
 Now unplug your network cable, turn off Wifi or disconnect from VPN.
@@ -693,14 +743,14 @@ The command below will continue to work even though no cookies are used and the 
 This is because the invocation above caused the user's authentication and authorization information to be cached.
 
 ```sh
-curl -u sam:'Horton!#works' -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
+curl -u sam:'********' -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
 ```
 
 The command below uses and invalid password and is intended to prove that the previously authenticated credentials are re-verified.
 It is important to note that Knox does not store the actual password in the cache for this verification but rather a one way hash of the password.
 
 ```sh
-curl -u sam:invalid-password -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
+curl -u sam:'invalid-password' -ik 'https://localhost:8443/gateway/sample6/api/v1/version'
 ```
 
 # Sample 7
@@ -712,6 +762,8 @@ The important things to observe here are:
 1. the inclusion of the Hadoop services instead of the Knox Admin API
 1. the inclusion of the identity-assertion provider
 1. the exclusion of the hostmap provider as this is rarely required unless running Hadoop on local VMs with port mapping
+
+Create the final sample7 topology file.
  
 [\<GATEWAY_HOME>/conf/topologies/sample7.xml](/static/activedirectory/sample7.xml)
 
@@ -727,9 +779,9 @@ The important things to observe here are:
             <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
             <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
 
-            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad.qa.your-domain.com:389"/>
             <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
-            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="********"/>
 
             <param name="main.ldapRealm.userSearchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
@@ -738,7 +790,7 @@ The important things to observe here are:
             <param name="main.ldapRealm.authorizationEnabled" value="true"/>
             <param name="main.ldapRealm.groupSearchBase" value="OU=groups,DC=hwqe,DC=hortonworks,DC=com"/>
             <param name="main.ldapRealm.groupObjectClass" value="group"/>
-            <param name="main.ldapRealm.groupIdAttribute" value="CN"/>
+            <param name="main.ldapRealm.groupIdAttribute" value="sAMAccountName"/>
             <param name="main.ldapRealm.memberAttribute" value="member"/>
 
             <param name="main.cacheManager" value="org.apache.shiro.cache.ehcache.EhCacheManager"/>
@@ -806,9 +858,26 @@ The important things to observe here are:
 </topology>
 ```
 
+To verify topology files we frequently use the WebHDFS GETHOMEDIRECTORY command.
+
+```sh
+curl -ku guest:guest-password 'https://localhost:8443/gateway/sandbox/webhdfs/v1/?op=GETHOMEDIRECTORY' 
+```
+
+This should return a response body similar to what is shown below.
+
+```json
+{"Path": "/user/guest"}
+```
+
+Hopefully this provides a more targeted and useful example of using Apache Knox with ActiveDirectory than can be provided in the [Apache Knox User's Guide][usr-guide].
+If you have more questions, comments or suggestions please join the [Apache Knox][knox-site] community.
+In particular you might be interested in one of the [mailing lists][knox-lists].
+
 [knox-site]: http://knox.apache.org/
 [knox-lists]: http://knox.apache.org/mail-lists.html
-[user-guide]: http://knox.apache.org/books/knox-0-6-0/user-guide.html "Apache Knox User's Guide"
+[usr-guide]: http://knox.apache.org/books/knox-0-6-0/user-guide.html "Apache Knox User's Guide"
 [dev-guide]: http://knox.apache.org/books/knox-0-6-0/dev-guide.html "Apache Knox Developer's Guide"
 [apache-ds]: https://directory.apache.org/apacheds/
 [openldap]: http://www.openldap.org/
+[shiro]: http://shiro.apache.org/
