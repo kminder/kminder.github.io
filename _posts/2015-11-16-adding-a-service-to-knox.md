@@ -5,7 +5,8 @@ date:   2015-11-16
 categories: knox
 ---
 
-This article will cover adding a service to [Apache Knox][knox-site].
+This article covers adding a service to [Apache Knox][knox-site].
+
 The intention here is to provide an intentionally simple example, avoiding complexity wherever possible.
 The goal being getting something working as a starting point upon which more complicated scenarios could build.
 You may want to review the Apache Knox [User's Guide][user-guide] and [Developer's Guide][dev-guide] before reading this. 

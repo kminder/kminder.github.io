@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<topology>
+    <gateway>
+
+        <provider>
+            <role>authentication</role>
+            <name>ShiroProvider</name>
+            <enabled>true</enabled>
+            <param name="main.ldapRealm" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm"/>
+            <param name="main.ldapContextFactory" value="org.apache.hadoop.gateway.shirorealm.KnoxLdapContextFactory"/>
+            <param name="main.ldapRealm.contextFactory" value="$ldapContextFactory"/>
+
+            <param name="main.ldapRealm.contextFactory.url" value="ldap://ad-nano.qe.hortonworks.com:389"/>
+            <param name="main.ldapRealm.contextFactory.systemUsername" value="CN=Kevin Minder,CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
+            <param name="main.ldapRealm.contextFactory.systemPassword" value="p@ssw0rd"/>
+
+            <param name="main.ldapRealm.userSearchBase" value="CN=Users,DC=hwqe,DC=hortonworks,DC=com"/>
+            <param name="main.ldapRealm.userSearchAttributeName" value="sAMAccountName"/>
+            <param name="main.ldapRealm.userObjectClass" value="person"/>
+
+            <param name="main.ldapRealm.authorizationEnabled" value="true"/>
+            <param name="main.ldapRealm.groupSearchBase" value="OU=groups,DC=hwqe,DC=hortonworks,DC=com"/>
+            <param name="main.ldapRealm.groupObjectClass" value="group"/>
+            <param name="main.ldapRealm.groupIdAttribute" value="CN"/>
+            <param name="main.ldapRealm.memberAttribute" value="member"/>
+
+            <param name="main.cacheManager" value="org.apache.shiro.cache.ehcache.EhCacheManager"/>
+            <param name="main.securityManager.cacheManager" value="$cacheManager"/>
+            <param name="main.ldapRealm.authenticationCachingEnabled" value="true"/>
+
+            <param name="urls./**" value="authcBasic"/>
+        </provider>
+
+        <provider>
+            <role>authorization</role>
+            <name>AclsAuthz</name>
+            <enabled>true</enabled>
+            <param name="knox.acl" value="*;knox_hdp_users;*"/>
+        </provider>
+
+        <provider>
+            <role>identity-assertion</role>
+            <name>Default</name>
+            <enabled>true</enabled>
+        </provider>
+
+    </gateway>
+
+    <service>
+        <role>NAMENODE</role>
+        <url>hdfs://your-nn-host.your-domain.com:8020</url>
+    </service>
+
+    <service>
+        <role>JOBTRACKER</role>
+        <url>rpc://your-jt-host.your-domain.com:8050</url>
+    </service>
+
+    <service>
+        <role>WEBHDFS</role>
+        <url>http://your-nn-host.your-domain.com:50070/webhdfs</url>
+    </service>
+
+    <service>
+        <role>WEBHCAT</role>
+        <url>http://your-webhcat-host.your-domain.com:50111/templeton</url>
+    </service>
+
+    <service>
+        <role>OOZIE</role>
+        <url>http://your-oozie-host.your-domain.com:11000/oozie</url>
+    </service>
+
+    <service>
+        <role>WEBHBASE</role>
+        <url>http://your-hbase-host.your-domain.com:60080</url>
+    </service>
+
+    <service>
+        <role>HIVE</role>
+        <url>http://your-hive-host.your-domain.com:10001/cliservice</url>
+    </service>
+
+    <service>
+        <role>RESOURCEMANAGER</role>
+        <url>http://your-rm-host.your-domain.com:8088/ws</url>
+    </service>
+
+</topology>
+
