@@ -15,7 +15,7 @@ This can be used to solve a common problem caused by the importing of groups int
 Please setup an environment as described in '[Setting up Apache Knox in three easy steps](/knox/2015/11/18/setting-up-knox.html)'.
 The examples here assume the environment described there as a base environment.
 
-My college Larry McCay implemented all the code for this article in his [github repo](https://github.com/lmccay/gateway-provider-identity-assertion-groupstolower).
+My colleague Larry McCay implemented all the code for this article in his [github repo](https://github.com/lmccay/gateway-provider-identity-assertion-groupstolower).
 
 ```sh
 ~/Projects> git clone https://github.com/lmccay/gateway-provider-identity-assertion-groupstolower.git
